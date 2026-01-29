@@ -113,6 +113,24 @@ class KDTPlacerDialog(wx.Dialog):
 
         sizer.Add(params_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
 
+        # Layout offset row
+        offset_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        offset_label = wx.StaticText(self, label="Layout Offset:")
+        offset_label.SetToolTip("Shift the entire layout by this amount (in mm)")
+        offset_sizer.Add(offset_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+
+        offset_sizer.Add(wx.StaticText(self, label="X:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        self.offset_x_ctrl = wx.TextCtrl(self, value="0", size=(60, -1))
+        self.offset_x_ctrl.SetToolTip("X offset in mm (shifts layout right)")
+        offset_sizer.Add(self.offset_x_ctrl, 0, wx.RIGHT, 15)
+
+        offset_sizer.Add(wx.StaticText(self, label="Y:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        self.offset_y_ctrl = wx.TextCtrl(self, value="0", size=(60, -1))
+        self.offset_y_ctrl.SetToolTip("Y offset in mm (shifts layout down)")
+        offset_sizer.Add(self.offset_y_ctrl, 0)
+
+        sizer.Add(offset_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+
         return sizer
 
     def _create_switch_settings(self) -> wx.StaticBoxSizer:
@@ -311,6 +329,8 @@ class KDTPlacerDialog(wx.Dialog):
         self.step_x_ctrl.SetValue("19.05")
         self.step_y_ctrl.SetValue("19.05")
         self.ref_unit_ctrl.SetValue("60")
+        self.offset_x_ctrl.SetValue("0")
+        self.offset_y_ctrl.SetValue("0")
 
         self.switch_pattern_ctrl.SetValue("SW{}")
         self.switch_orientation_ctrl.SetValue("0")
@@ -357,6 +377,8 @@ class KDTPlacerDialog(wx.Dialog):
             'step_x_mm': float(self.step_x_ctrl.GetValue() or 19.05),
             'step_y_mm': float(self.step_y_ctrl.GetValue() or 19.05),
             'ref_unit_px': float(self.ref_unit_ctrl.GetValue() or 60),
+            'offset_x_mm': float(self.offset_x_ctrl.GetValue() or 0),
+            'offset_y_mm': float(self.offset_y_ctrl.GetValue() or 0),
             'switch_config': ComponentConfig(
                 name="Switch",
                 annotation_pattern=self.switch_pattern_ctrl.GetValue(),
@@ -396,6 +418,8 @@ class KDTPlacerDialog(wx.Dialog):
             'step_x': self.step_x_ctrl.GetValue(),
             'step_y': self.step_y_ctrl.GetValue(),
             'ref_unit': self.ref_unit_ctrl.GetValue(),
+            'offset_x': self.offset_x_ctrl.GetValue(),
+            'offset_y': self.offset_y_ctrl.GetValue(),
             'switch_pattern': self.switch_pattern_ctrl.GetValue(),
             'switch_orientation': self.switch_orientation_ctrl.GetValue(),
             'switch_side': self.switch_side_choice.GetSelection(),
@@ -426,6 +450,10 @@ class KDTPlacerDialog(wx.Dialog):
             self.step_y_ctrl.SetValue(settings['step_y'])
         if 'ref_unit' in settings:
             self.ref_unit_ctrl.SetValue(settings['ref_unit'])
+        if 'offset_x' in settings:
+            self.offset_x_ctrl.SetValue(settings['offset_x'])
+        if 'offset_y' in settings:
+            self.offset_y_ctrl.SetValue(settings['offset_y'])
 
         if 'switch_pattern' in settings:
             self.switch_pattern_ctrl.SetValue(settings['switch_pattern'])

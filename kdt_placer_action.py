@@ -94,7 +94,9 @@ class KDTPlacerAction(pcbnew.ActionPlugin):
                 additional_configs=settings['additional_configs'],
                 step_x_mm=settings['step_x_mm'],
                 step_y_mm=settings['step_y_mm'],
-                ref_unit_px=settings['ref_unit_px']
+                ref_unit_px=settings['ref_unit_px'],
+                offset_x_mm=settings['offset_x_mm'],
+                offset_y_mm=settings['offset_y_mm']
             )
 
             # Refresh the board view

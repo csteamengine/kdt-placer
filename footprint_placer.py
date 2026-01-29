@@ -118,7 +118,9 @@ class FootprintPlacer:
         additional_configs: List[ComponentConfig],
         step_x_mm: float = 19.05,
         step_y_mm: float = 19.05,
-        ref_unit_px: float = 60.0
+        ref_unit_px: float = 60.0,
+        offset_x_mm: float = 0.0,
+        offset_y_mm: float = 0.0
     ) -> PlacementSummary:
         """
         Place footprints for all keys.
@@ -131,6 +133,8 @@ class FootprintPlacer:
             step_x_mm: Horizontal key spacing in mm
             step_y_mm: Vertical key spacing in mm
             ref_unit_px: Reference unit size in pixels (for scaling)
+            offset_x_mm: X offset to shift entire layout (in mm)
+            offset_y_mm: Y offset to shift entire layout (in mm)
 
         Returns:
             PlacementSummary with results
@@ -140,9 +144,9 @@ class FootprintPlacer:
         errors = []
 
         for key in keys:
-            # Calculate target position in mm
-            x_mm = (key.center_x / ref_unit_px) * step_x_mm
-            y_mm = (key.center_y / ref_unit_px) * step_y_mm
+            # Calculate target position in mm (with layout offset applied)
+            x_mm = (key.center_x / ref_unit_px) * step_x_mm + offset_x_mm
+            y_mm = (key.center_y / ref_unit_px) * step_y_mm + offset_y_mm
 
             # Place switch
             if switch_config.enabled:
