@@ -41,12 +41,60 @@ def parse_kdt_json(json_path: str) -> List[KeyData]:
     return parse_kdt_data(data)
 
 
-def parse_kdt_data(data: dict) -> List[KeyData]:
+def find_nodes(data) -> List[dict]:
     """
-    Parse KDT data from a dictionary.
+    Find the nodes array in various JSON structures.
+
+    Tries multiple common structures:
+    - data.layout.nodes
+    - data.nodes
+    - data (if it's a list)
 
     Args:
-        data: Parsed JSON dictionary
+        data: Parsed JSON data
+
+    Returns:
+        List of node dictionaries
+
+    Raises:
+        ValueError: If no nodes array can be found
+    """
+    # If data is already a list, assume it's the nodes array
+    if isinstance(data, list):
+        return data
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object or array, got {type(data).__name__}")
+
+    # Try data.layout.nodes
+    if 'layout' in data:
+        layout = data['layout']
+        if isinstance(layout, dict) and 'nodes' in layout:
+            nodes = layout['nodes']
+            if isinstance(nodes, list):
+                return nodes
+
+    # Try data.nodes
+    if 'nodes' in data:
+        nodes = data['nodes']
+        if isinstance(nodes, list):
+            return nodes
+
+    # Show helpful error with available keys
+    available_keys = list(data.keys()) if isinstance(data, dict) else []
+    raise ValueError(
+        f"Could not find nodes array in JSON. "
+        f"Tried: 'layout.nodes', 'nodes'. "
+        f"Available top-level keys: {available_keys}"
+    )
+
+
+def parse_kdt_data(data) -> List[KeyData]:
+    """
+    Parse KDT data from a dictionary or list.
+
+    Args:
+        data: Parsed JSON data (dict or list)
 
     Returns:
         List of KeyData objects
@@ -54,15 +102,10 @@ def parse_kdt_data(data: dict) -> List[KeyData]:
     Raises:
         ValueError: If data structure is invalid
     """
-    if 'layout' not in data:
-        raise ValueError("JSON must contain 'layout' key")
-
-    layout = data['layout']
-    if 'nodes' not in layout:
-        raise ValueError("Layout must contain 'nodes' array")
+    nodes = find_nodes(data)
 
     keys = []
-    for node in layout['nodes']:
+    for node in nodes:
         key = parse_node(node)
         if key is not None:
             keys.append(key)
@@ -146,14 +189,12 @@ def validate_json_structure(json_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         return False, f"Invalid JSON: {e}"
 
-    if 'layout' not in data:
-        return False, "JSON must contain 'layout' key"
+    # Try to find nodes using the flexible finder
+    try:
+        nodes = find_nodes(data)
+    except ValueError as e:
+        return False, str(e)
 
-    layout = data['layout']
-    if 'nodes' not in layout:
-        return False, "Layout must contain 'nodes' array"
-
-    nodes = layout['nodes']
     if not isinstance(nodes, list):
         return False, "'nodes' must be an array"
 

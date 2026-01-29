@@ -4,9 +4,37 @@ wxPython dialog for KDT Placer settings.
 
 import wx
 import os
+import json
 from typing import List, Optional, Tuple
+from pathlib import Path
 
 from .footprint_placer import ComponentConfig
+
+
+# Settings file location
+SETTINGS_DIR = Path.home() / ".config" / "kdt-placer"
+SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+
+
+def load_settings() -> dict:
+    """Load settings from the config file."""
+    if not SETTINGS_FILE.exists():
+        return {}
+    try:
+        with open(SETTINGS_FILE, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def save_settings(settings: dict):
+    """Save settings to the config file."""
+    try:
+        SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+    except IOError:
+        pass  # Silently fail if we can't save
 
 
 class AdditionalComponentPanel(wx.Panel):
@@ -85,6 +113,7 @@ class KDTPlacerDialog(wx.Dialog):
         self.additional_panels: List[AdditionalComponentPanel] = []
 
         self._create_ui()
+        self._load_saved_settings()
         self.SetSize(550, 650)
         self.Centre()
 
@@ -320,6 +349,102 @@ class KDTPlacerDialog(wx.Dialog):
             ),
             'additional_configs': [p.get_config() for p in self.additional_panels]
         }
+
+    def get_serializable_settings(self) -> dict:
+        """
+        Get settings in a format that can be serialized to JSON.
+
+        Returns:
+            Dictionary with serializable settings
+        """
+        additional = []
+        for panel in self.additional_panels:
+            additional.append({
+                'name': panel.name_ctrl.GetValue(),
+                'pattern': panel.pattern_ctrl.GetValue(),
+                'x_offset': panel.x_offset_ctrl.GetValue(),
+                'y_offset': panel.y_offset_ctrl.GetValue(),
+                'orientation': panel.orientation_ctrl.GetValue(),
+                'side': panel.side_choice.GetStringSelection()
+            })
+
+        return {
+            'json_file': self.json_file_ctrl.GetValue(),
+            'step_x': self.step_x_ctrl.GetValue(),
+            'step_y': self.step_y_ctrl.GetValue(),
+            'ref_unit': self.ref_unit_ctrl.GetValue(),
+            'switch_pattern': self.switch_pattern_ctrl.GetValue(),
+            'switch_orientation': self.switch_orientation_ctrl.GetValue(),
+            'switch_side': self.switch_side_radio.GetSelection(),
+            'diode_enabled': self.diode_enabled_cb.GetValue(),
+            'diode_pattern': self.diode_pattern_ctrl.GetValue(),
+            'diode_x_offset': self.diode_x_offset_ctrl.GetValue(),
+            'diode_y_offset': self.diode_y_offset_ctrl.GetValue(),
+            'diode_orientation': self.diode_orientation_ctrl.GetValue(),
+            'diode_side': self.diode_side_radio.GetSelection(),
+            'additional_components': additional
+        }
+
+    def save_current_settings(self):
+        """Save current dialog settings to the config file."""
+        save_settings(self.get_serializable_settings())
+
+    def _load_saved_settings(self):
+        """Load and apply saved settings to the dialog controls."""
+        settings = load_settings()
+        if not settings:
+            return
+
+        # Main settings
+        if 'json_file' in settings:
+            self.json_file_ctrl.SetValue(settings['json_file'])
+        if 'step_x' in settings:
+            self.step_x_ctrl.SetValue(settings['step_x'])
+        if 'step_y' in settings:
+            self.step_y_ctrl.SetValue(settings['step_y'])
+        if 'ref_unit' in settings:
+            self.ref_unit_ctrl.SetValue(settings['ref_unit'])
+
+        # Switch settings
+        if 'switch_pattern' in settings:
+            self.switch_pattern_ctrl.SetValue(settings['switch_pattern'])
+        if 'switch_orientation' in settings:
+            self.switch_orientation_ctrl.SetValue(settings['switch_orientation'])
+        if 'switch_side' in settings:
+            self.switch_side_radio.SetSelection(settings['switch_side'])
+
+        # Diode settings
+        if 'diode_enabled' in settings:
+            self.diode_enabled_cb.SetValue(settings['diode_enabled'])
+            self.diode_panel.Enable(settings['diode_enabled'])
+        if 'diode_pattern' in settings:
+            self.diode_pattern_ctrl.SetValue(settings['diode_pattern'])
+        if 'diode_x_offset' in settings:
+            self.diode_x_offset_ctrl.SetValue(settings['diode_x_offset'])
+        if 'diode_y_offset' in settings:
+            self.diode_y_offset_ctrl.SetValue(settings['diode_y_offset'])
+        if 'diode_orientation' in settings:
+            self.diode_orientation_ctrl.SetValue(settings['diode_orientation'])
+        if 'diode_side' in settings:
+            self.diode_side_radio.SetSelection(settings['diode_side'])
+
+        # Additional components
+        if 'additional_components' in settings:
+            for comp in settings['additional_components']:
+                panel = AdditionalComponentPanel(
+                    self.additional_scroll,
+                    name=comp.get('name', ''),
+                    on_remove=self._on_remove_component
+                )
+                panel.pattern_ctrl.SetValue(comp.get('pattern', 'LED{}'))
+                panel.x_offset_ctrl.SetValue(comp.get('x_offset', '0'))
+                panel.y_offset_ctrl.SetValue(comp.get('y_offset', '0'))
+                panel.orientation_ctrl.SetValue(comp.get('orientation', '0'))
+                side = comp.get('side', 'Top')
+                panel.side_choice.SetSelection(0 if side == 'Top' else 1)
+                self.additional_panels.append(panel)
+                self.additional_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, 5)
+            self.additional_scroll.FitInside()
 
     def validate(self) -> Tuple[bool, str]:
         """

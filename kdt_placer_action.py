@@ -78,6 +78,9 @@ class KDTPlacerAction(pcbnew.ActionPlugin):
                 dialog.Destroy()
                 return
 
+            # Save settings for next time
+            dialog.save_current_settings()
+
             # Place footprints
             placer = FootprintPlacer(board)
 
