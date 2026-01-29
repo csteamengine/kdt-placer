@@ -216,8 +216,8 @@ class FootprintPlacer:
 
         try:
             # Calculate offset with key rotation applied
-            # Negate rotation to match KiCad's coordinate system
-            rotated_x, rotated_y = rotate_offset(x_offset_mm, y_offset_mm, -key.rotation)
+            # Use positive rotation for offset (keeps component relative to rotated switch)
+            rotated_x, rotated_y = rotate_offset(x_offset_mm, y_offset_mm, key.rotation)
 
             # Final position
             final_x_mm = base_x_mm + rotated_x
