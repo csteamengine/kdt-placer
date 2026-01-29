@@ -203,12 +203,29 @@ def validate_json_structure(json_path: str) -> tuple[bool, str]:
 
     # Check at least one valid key exists
     valid_keys = 0
-    for node in nodes:
+    issues = []
+    for i, node in enumerate(nodes[:5]):  # Check first 5 nodes for debug
+        has_position = 'position' in node
+        has_data = 'data' in node
+        has_label = 'label' in node.get('data', {}) if has_data else False
+
+        if has_position and has_data and has_label:
+            valid_keys += 1
+        elif i < 3:  # Show issues for first 3 problematic nodes
+            node_keys = list(node.keys()) if isinstance(node, dict) else f"not a dict: {type(node)}"
+            data_keys = list(node.get('data', {}).keys()) if has_data else "no data"
+            issues.append(f"Node {i}: keys={node_keys}, data_keys={data_keys}")
+
+    # Count remaining valid keys
+    for node in nodes[5:]:
         if 'position' in node and 'data' in node:
             if 'label' in node.get('data', {}):
                 valid_keys += 1
 
     if valid_keys == 0:
-        return False, "No valid key nodes found (nodes must have position, data, and data.label)"
+        debug_info = f"Found {len(nodes)} nodes total. "
+        if issues:
+            debug_info += "Issues: " + "; ".join(issues)
+        return False, f"No valid key nodes found. {debug_info}"
 
     return True, f"Valid JSON with {valid_keys} keys"
