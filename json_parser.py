@@ -41,7 +41,7 @@ def parse_kdt_json(json_path: str) -> List[KeyData]:
     return parse_kdt_data(data)
 
 
-def find_nodes(data) -> List[dict]:
+def find_nodes(data) -> tuple[List[dict], str]:
     """
     Find the nodes array in various JSON structures.
 
@@ -54,14 +54,14 @@ def find_nodes(data) -> List[dict]:
         data: Parsed JSON data
 
     Returns:
-        List of node dictionaries
+        Tuple of (list of node dictionaries, source path string)
 
     Raises:
         ValueError: If no nodes array can be found
     """
     # If data is already a list, assume it's the nodes array
     if isinstance(data, list):
-        return data
+        return data, "root (list)"
 
     if not isinstance(data, dict):
         raise ValueError(f"Expected JSON object or array, got {type(data).__name__}")
@@ -72,13 +72,13 @@ def find_nodes(data) -> List[dict]:
         if isinstance(layout, dict) and 'nodes' in layout:
             nodes = layout['nodes']
             if isinstance(nodes, list):
-                return nodes
+                return nodes, "layout.nodes"
 
     # Try data.nodes
     if 'nodes' in data:
         nodes = data['nodes']
         if isinstance(nodes, list):
-            return nodes
+            return nodes, "nodes"
 
     # Show helpful error with available keys
     available_keys = list(data.keys()) if isinstance(data, dict) else []
@@ -102,7 +102,7 @@ def parse_kdt_data(data) -> List[KeyData]:
     Raises:
         ValueError: If data structure is invalid
     """
-    nodes = find_nodes(data)
+    nodes, _ = find_nodes(data)
 
     keys = []
     for node in nodes:
@@ -191,7 +191,7 @@ def validate_json_structure(json_path: str) -> tuple[bool, str]:
 
     # Try to find nodes using the flexible finder
     try:
-        nodes = find_nodes(data)
+        nodes, source_path = find_nodes(data)
     except ValueError as e:
         return False, str(e)
 
@@ -205,6 +205,11 @@ def validate_json_structure(json_path: str) -> tuple[bool, str]:
     valid_keys = 0
     issues = []
     for i, node in enumerate(nodes[:5]):  # Check first 5 nodes for debug
+        if not isinstance(node, dict):
+            if i < 3:
+                issues.append(f"Node {i}: not a dict, is {type(node).__name__}")
+            continue
+
         has_position = 'position' in node
         has_data = 'data' in node
         has_label = 'label' in node.get('data', {}) if has_data else False
@@ -212,18 +217,18 @@ def validate_json_structure(json_path: str) -> tuple[bool, str]:
         if has_position and has_data and has_label:
             valid_keys += 1
         elif i < 3:  # Show issues for first 3 problematic nodes
-            node_keys = list(node.keys()) if isinstance(node, dict) else f"not a dict: {type(node)}"
+            node_keys = list(node.keys())
             data_keys = list(node.get('data', {}).keys()) if has_data else "no data"
             issues.append(f"Node {i}: keys={node_keys}, data_keys={data_keys}")
 
     # Count remaining valid keys
     for node in nodes[5:]:
-        if 'position' in node and 'data' in node:
+        if isinstance(node, dict) and 'position' in node and 'data' in node:
             if 'label' in node.get('data', {}):
                 valid_keys += 1
 
     if valid_keys == 0:
-        debug_info = f"Found {len(nodes)} nodes total. "
+        debug_info = f"Found {len(nodes)} nodes at '{source_path}'. "
         if issues:
             debug_info += "Issues: " + "; ".join(issues)
         return False, f"No valid key nodes found. {debug_info}"
