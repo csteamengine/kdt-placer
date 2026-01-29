@@ -275,6 +275,12 @@ class KDTPlacerDialog(wx.Dialog):
         """Create the dialog buttons."""
         sizer = wx.BoxSizer(wx.HORIZONTAL)
 
+        reset_btn = wx.Button(self, label="Reset Defaults")
+        reset_btn.Bind(wx.EVT_BUTTON, self._on_reset_defaults)
+        sizer.Add(reset_btn, 0, wx.RIGHT, 10)
+
+        sizer.AddStretchSpacer()
+
         ok_btn = wx.Button(self, wx.ID_OK, "Place Footprints")
         cancel_btn = wx.Button(self, wx.ID_CANCEL, "Cancel")
 
@@ -282,6 +288,35 @@ class KDTPlacerDialog(wx.Dialog):
         sizer.Add(cancel_btn, 0)
 
         return sizer
+
+    def _on_reset_defaults(self, event):
+        """Reset all settings to defaults."""
+        # Main settings
+        self.json_file_ctrl.SetValue("")
+        self.step_x_ctrl.SetValue("19.05")
+        self.step_y_ctrl.SetValue("19.05")
+        self.ref_unit_ctrl.SetValue("60")
+
+        # Switch settings
+        self.switch_pattern_ctrl.SetValue("SW{}")
+        self.switch_orientation_ctrl.SetValue("0")
+        self.switch_side_radio.SetSelection(0)  # Top
+
+        # Diode settings
+        self.diode_enabled_cb.SetValue(True)
+        self.diode_panel.Enable(True)
+        self.diode_pattern_ctrl.SetValue("D{}")
+        self.diode_x_offset_ctrl.SetValue("0")
+        self.diode_y_offset_ctrl.SetValue("5")
+        self.diode_orientation_ctrl.SetValue("0")
+        self.diode_side_radio.SetSelection(1)  # Bottom
+
+        # Remove all additional components
+        for panel in self.additional_panels[:]:
+            panel.Destroy()
+        self.additional_panels.clear()
+        self.additional_scroll.FitInside()
+        self.Layout()
 
     def _on_browse(self, event):
         """Handle browse button click."""

@@ -40,8 +40,12 @@ class KDTPlacerAction(pcbnew.ActionPlugin):
 
         # Show dialog
         dialog = KDTPlacerDialog(None)
+        result = dialog.ShowModal()
 
-        if dialog.ShowModal() == wx.ID_OK:
+        # Always save settings when dialog closes
+        dialog.save_current_settings()
+
+        if result == wx.ID_OK:
             # Validate settings
             is_valid, error_msg = dialog.validate()
             if not is_valid:
@@ -77,9 +81,6 @@ class KDTPlacerAction(pcbnew.ActionPlugin):
                 )
                 dialog.Destroy()
                 return
-
-            # Save settings for next time
-            dialog.save_current_settings()
 
             # Place footprints
             placer = FootprintPlacer(board)
