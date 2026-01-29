@@ -37,69 +37,6 @@ def save_settings(settings: dict):
         pass  # Silently fail if we can't save
 
 
-class AdditionalComponentPanel(wx.Panel):
-    """Panel for configuring a single additional component."""
-
-    def __init__(self, parent, name: str = "", on_remove=None):
-        super().__init__(parent)
-        self.on_remove = on_remove
-
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-
-        # Name
-        sizer.Add(wx.StaticText(self, label="Name:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        self.name_ctrl = wx.TextCtrl(self, value=name, size=(60, -1))
-        sizer.Add(self.name_ctrl, 0, wx.RIGHT, 10)
-
-        # Pattern
-        sizer.Add(wx.StaticText(self, label="Pattern:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        self.pattern_ctrl = wx.TextCtrl(self, value="LED{}", size=(60, -1))
-        sizer.Add(self.pattern_ctrl, 0, wx.RIGHT, 10)
-
-        # X Offset
-        sizer.Add(wx.StaticText(self, label="X:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        self.x_offset_ctrl = wx.TextCtrl(self, value="0", size=(45, -1))
-        sizer.Add(self.x_offset_ctrl, 0, wx.RIGHT, 10)
-
-        # Y Offset
-        sizer.Add(wx.StaticText(self, label="Y:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        self.y_offset_ctrl = wx.TextCtrl(self, value="0", size=(45, -1))
-        sizer.Add(self.y_offset_ctrl, 0, wx.RIGHT, 10)
-
-        # Orientation
-        sizer.Add(wx.StaticText(self, label="Rot:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        self.orientation_ctrl = wx.TextCtrl(self, value="0", size=(45, -1))
-        sizer.Add(self.orientation_ctrl, 0, wx.RIGHT, 10)
-
-        # Side
-        self.side_choice = wx.Choice(self, choices=["Top", "Bottom"])
-        self.side_choice.SetSelection(0)
-        sizer.Add(self.side_choice, 0, wx.RIGHT, 10)
-
-        # Remove button
-        remove_btn = wx.Button(self, label="Remove", size=(60, -1))
-        remove_btn.Bind(wx.EVT_BUTTON, self._on_remove)
-        sizer.Add(remove_btn, 0)
-
-        self.SetSizer(sizer)
-
-    def _on_remove(self, event):
-        if self.on_remove:
-            self.on_remove(self)
-
-    def get_config(self) -> ComponentConfig:
-        """Get the component configuration from this panel."""
-        return ComponentConfig(
-            name=self.name_ctrl.GetValue(),
-            annotation_pattern=self.pattern_ctrl.GetValue(),
-            x_offset_mm=float(self.x_offset_ctrl.GetValue() or 0),
-            y_offset_mm=float(self.y_offset_ctrl.GetValue() or 0),
-            orientation_deg=float(self.orientation_ctrl.GetValue() or 0),
-            pcb_side=self.side_choice.GetStringSelection(),
-            enabled=True
-        )
-
-
 class KDTPlacerDialog(wx.Dialog):
     """Main settings dialog for KDT Placer."""
 
@@ -110,11 +47,12 @@ class KDTPlacerDialog(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         )
 
-        self.additional_panels: List[AdditionalComponentPanel] = []
+        # Store additional component controls as list of dicts
+        self.additional_components: List[dict] = []
 
         self._create_ui()
         self._load_saved_settings()
-        self.SetSize(550, 650)
+        self.SetSize(700, 600)
         self.Centre()
 
     def _create_ui(self):
@@ -131,7 +69,7 @@ class KDTPlacerDialog(wx.Dialog):
         main_sizer.Add(self._create_diode_settings(), 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Additional components section
-        main_sizer.Add(self._create_additional_components(), 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        main_sizer.Add(self._create_additional_components(), 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Buttons
         main_sizer.Add(self._create_buttons(), 0, wx.ALIGN_RIGHT | wx.ALL, 10)
@@ -143,35 +81,38 @@ class KDTPlacerDialog(wx.Dialog):
         box = wx.StaticBox(self, label="Main Settings")
         sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
 
-        grid = wx.FlexGridSizer(4, 2, 5, 10)
-        grid.AddGrowableCol(1, 1)
-
-        # JSON File
-        grid.Add(wx.StaticText(self, label="JSON File:"), 0, wx.ALIGN_CENTER_VERTICAL)
+        # JSON File row
         file_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        file_sizer.Add(wx.StaticText(self, label="JSON File:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
         self.json_file_ctrl = wx.TextCtrl(self)
         file_sizer.Add(self.json_file_ctrl, 1, wx.EXPAND | wx.RIGHT, 5)
         browse_btn = wx.Button(self, label="Browse...", size=(80, -1))
         browse_btn.Bind(wx.EVT_BUTTON, self._on_browse)
         file_sizer.Add(browse_btn, 0)
-        grid.Add(file_sizer, 1, wx.EXPAND)
+        sizer.Add(file_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
-        # Step X
-        grid.Add(wx.StaticText(self, label="Step X (mm):"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.step_x_ctrl = wx.TextCtrl(self, value="19.05")
-        grid.Add(self.step_x_ctrl, 1, wx.EXPAND)
+        # Step X, Step Y, Reference Unit in one row
+        params_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        params_sizer.Add(wx.StaticText(self, label="Step X (mm):"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.step_x_ctrl = wx.TextCtrl(self, value="19.05", size=(60, -1))
+        params_sizer.Add(self.step_x_ctrl, 0, wx.RIGHT, 15)
 
-        # Step Y
-        grid.Add(wx.StaticText(self, label="Step Y (mm):"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.step_y_ctrl = wx.TextCtrl(self, value="19.05")
-        grid.Add(self.step_y_ctrl, 1, wx.EXPAND)
+        params_sizer.Add(wx.StaticText(self, label="Step Y (mm):"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.step_y_ctrl = wx.TextCtrl(self, value="19.05", size=(60, -1))
+        params_sizer.Add(self.step_y_ctrl, 0, wx.RIGHT, 15)
 
-        # Reference Unit Size
-        grid.Add(wx.StaticText(self, label="Reference Unit Size (px):"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.ref_unit_ctrl = wx.TextCtrl(self, value="60")
-        grid.Add(self.ref_unit_ctrl, 1, wx.EXPAND)
+        ref_label = wx.StaticText(self, label="Ref Unit (px):")
+        ref_label.SetToolTip("Size of 1U key in the JSON file (in pixels).\n"
+                            "This is the pixel width/height of a standard 1U key\n"
+                            "in your KDT layout. Default is 60px.\n\n"
+                            "To find this: check the 'width' of a 1U key node in your JSON.")
+        params_sizer.Add(ref_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.ref_unit_ctrl = wx.TextCtrl(self, value="60", size=(60, -1))
+        self.ref_unit_ctrl.SetToolTip("Pixel size of 1U in the JSON layout")
+        params_sizer.Add(self.ref_unit_ctrl, 0)
 
-        sizer.Add(grid, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(params_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+
         return sizer
 
     def _create_switch_settings(self) -> wx.StaticBoxSizer:
@@ -179,27 +120,23 @@ class KDTPlacerDialog(wx.Dialog):
         box = wx.StaticBox(self, label="Switch Footprint Settings")
         sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
 
-        grid = wx.FlexGridSizer(3, 2, 5, 10)
-        grid.AddGrowableCol(1, 1)
+        row_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Annotation Pattern
-        grid.Add(wx.StaticText(self, label="Annotation Pattern:"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.switch_pattern_ctrl = wx.TextCtrl(self, value="SW{}")
-        grid.Add(self.switch_pattern_ctrl, 1, wx.EXPAND)
+        row_sizer.Add(wx.StaticText(self, label="Pattern:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.switch_pattern_ctrl = wx.TextCtrl(self, value="SW{}", size=(80, -1))
+        row_sizer.Add(self.switch_pattern_ctrl, 0, wx.RIGHT, 15)
 
-        # Orientation
-        grid.Add(wx.StaticText(self, label="Orientation (deg):"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.switch_orientation_ctrl = wx.TextCtrl(self, value="0")
-        grid.Add(self.switch_orientation_ctrl, 1, wx.EXPAND)
+        row_sizer.Add(wx.StaticText(self, label="Rotation:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.switch_orientation_ctrl = wx.TextCtrl(self, value="0", size=(50, -1))
+        row_sizer.Add(self.switch_orientation_ctrl, 0, wx.RIGHT, 15)
 
-        # PCB Side
-        grid.Add(wx.StaticText(self, label="PCB Side:"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.switch_side_radio = wx.RadioBox(
-            self, choices=["Top", "Bottom"], style=wx.RA_HORIZONTAL
-        )
-        grid.Add(self.switch_side_radio, 1, wx.EXPAND)
+        row_sizer.Add(wx.StaticText(self, label="Side:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.switch_side_choice = wx.Choice(self, choices=["Top", "Bottom"])
+        self.switch_side_choice.SetSelection(0)
+        row_sizer.Add(self.switch_side_choice, 0)
 
-        sizer.Add(grid, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(row_sizer, 0, wx.ALL, 5)
+
         return sizer
 
     def _create_diode_settings(self) -> wx.StaticBoxSizer:
@@ -207,69 +144,147 @@ class KDTPlacerDialog(wx.Dialog):
         box = wx.StaticBox(self, label="Diode Settings")
         sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
 
-        # Enabled checkbox
-        self.diode_enabled_cb = wx.CheckBox(self, label="Place diodes")
+        row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.diode_enabled_cb = wx.CheckBox(self, label="Enable")
         self.diode_enabled_cb.SetValue(True)
-        self.diode_enabled_cb.Bind(wx.EVT_CHECKBOX, self._on_diode_enabled_change)
-        sizer.Add(self.diode_enabled_cb, 0, wx.ALL, 5)
+        row_sizer.Add(self.diode_enabled_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
 
-        # Settings grid
-        self.diode_panel = wx.Panel(self)
-        grid = wx.FlexGridSizer(5, 2, 5, 10)
-        grid.AddGrowableCol(1, 1)
+        row_sizer.Add(wx.StaticText(self, label="Pattern:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.diode_pattern_ctrl = wx.TextCtrl(self, value="D{}", size=(70, -1))
+        row_sizer.Add(self.diode_pattern_ctrl, 0, wx.RIGHT, 10)
 
-        # Annotation Pattern
-        grid.Add(wx.StaticText(self.diode_panel, label="Annotation Pattern:"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.diode_pattern_ctrl = wx.TextCtrl(self.diode_panel, value="D{}")
-        grid.Add(self.diode_pattern_ctrl, 1, wx.EXPAND)
+        row_sizer.Add(wx.StaticText(self, label="X:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        self.diode_x_offset_ctrl = wx.TextCtrl(self, value="0", size=(40, -1))
+        row_sizer.Add(self.diode_x_offset_ctrl, 0, wx.RIGHT, 10)
 
-        # X Offset
-        grid.Add(wx.StaticText(self.diode_panel, label="X Offset (mm):"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.diode_x_offset_ctrl = wx.TextCtrl(self.diode_panel, value="0")
-        grid.Add(self.diode_x_offset_ctrl, 1, wx.EXPAND)
+        row_sizer.Add(wx.StaticText(self, label="Y:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        self.diode_y_offset_ctrl = wx.TextCtrl(self, value="5", size=(40, -1))
+        row_sizer.Add(self.diode_y_offset_ctrl, 0, wx.RIGHT, 10)
 
-        # Y Offset
-        grid.Add(wx.StaticText(self.diode_panel, label="Y Offset (mm):"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.diode_y_offset_ctrl = wx.TextCtrl(self.diode_panel, value="5")
-        grid.Add(self.diode_y_offset_ctrl, 1, wx.EXPAND)
+        row_sizer.Add(wx.StaticText(self, label="Rot:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        self.diode_orientation_ctrl = wx.TextCtrl(self, value="0", size=(40, -1))
+        row_sizer.Add(self.diode_orientation_ctrl, 0, wx.RIGHT, 10)
 
-        # Orientation
-        grid.Add(wx.StaticText(self.diode_panel, label="Orientation (deg):"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.diode_orientation_ctrl = wx.TextCtrl(self.diode_panel, value="0")
-        grid.Add(self.diode_orientation_ctrl, 1, wx.EXPAND)
+        row_sizer.Add(wx.StaticText(self, label="Side:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.diode_side_choice = wx.Choice(self, choices=["Top", "Bottom"])
+        self.diode_side_choice.SetSelection(1)  # Default to Bottom
+        row_sizer.Add(self.diode_side_choice, 0)
 
-        # PCB Side
-        grid.Add(wx.StaticText(self.diode_panel, label="PCB Side:"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.diode_side_radio = wx.RadioBox(
-            self.diode_panel, choices=["Top", "Bottom"], style=wx.RA_HORIZONTAL
-        )
-        self.diode_side_radio.SetSelection(1)  # Default to Bottom
-        grid.Add(self.diode_side_radio, 1, wx.EXPAND)
-
-        self.diode_panel.SetSizer(grid)
-        sizer.Add(self.diode_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        sizer.Add(row_sizer, 0, wx.ALL, 5)
 
         return sizer
 
     def _create_additional_components(self) -> wx.StaticBoxSizer:
         """Create the additional components section."""
-        box = wx.StaticBox(self, label="Additional Components")
-        sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
+        self.additional_box = wx.StaticBox(self, label="Additional Components")
+        sizer = wx.StaticBoxSizer(self.additional_box, wx.VERTICAL)
+
+        # Container for component rows
+        self.additional_sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.additional_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
         # Add button
-        add_btn = wx.Button(self, label="Add Component")
-        add_btn.Bind(wx.EVT_BUTTON, self._on_add_component)
-        sizer.Add(add_btn, 0, wx.ALL, 5)
-
-        # Scrolled panel for components
-        self.additional_scroll = wx.ScrolledWindow(self, style=wx.VSCROLL)
-        self.additional_scroll.SetScrollRate(0, 20)
-        self.additional_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.additional_scroll.SetSizer(self.additional_sizer)
-
-        sizer.Add(self.additional_scroll, 1, wx.EXPAND | wx.ALL, 5)
+        add_btn = wx.Button(self, label="+ Add Component")
+        self.Bind(wx.EVT_BUTTON, self._on_add_component, add_btn)
+        sizer.Add(add_btn, 0, wx.LEFT | wx.BOTTOM, 5)
 
         return sizer
+
+    def _create_component_row(self, name: str = "", pattern: str = "LED{}",
+                               x_offset: str = "0", y_offset: str = "0",
+                               rotation: str = "0", side: str = "Top") -> dict:
+        """Create a row of controls for an additional component."""
+        row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        controls = []  # Track all controls for cleanup
+
+        lbl = wx.StaticText(self, label="Name:")
+        controls.append(lbl)
+        row_sizer.Add(lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        name_ctrl = wx.TextCtrl(self, value=name, size=(60, -1))
+        controls.append(name_ctrl)
+        row_sizer.Add(name_ctrl, 0, wx.RIGHT, 8)
+
+        lbl = wx.StaticText(self, label="Pattern:")
+        controls.append(lbl)
+        row_sizer.Add(lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        pattern_ctrl = wx.TextCtrl(self, value=pattern, size=(70, -1))
+        controls.append(pattern_ctrl)
+        row_sizer.Add(pattern_ctrl, 0, wx.RIGHT, 8)
+
+        lbl = wx.StaticText(self, label="X:")
+        controls.append(lbl)
+        row_sizer.Add(lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        x_ctrl = wx.TextCtrl(self, value=x_offset, size=(40, -1))
+        controls.append(x_ctrl)
+        row_sizer.Add(x_ctrl, 0, wx.RIGHT, 8)
+
+        lbl = wx.StaticText(self, label="Y:")
+        controls.append(lbl)
+        row_sizer.Add(lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        y_ctrl = wx.TextCtrl(self, value=y_offset, size=(40, -1))
+        controls.append(y_ctrl)
+        row_sizer.Add(y_ctrl, 0, wx.RIGHT, 8)
+
+        lbl = wx.StaticText(self, label="Rot:")
+        controls.append(lbl)
+        row_sizer.Add(lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        rot_ctrl = wx.TextCtrl(self, value=rotation, size=(40, -1))
+        controls.append(rot_ctrl)
+        row_sizer.Add(rot_ctrl, 0, wx.RIGHT, 8)
+
+        side_choice = wx.Choice(self, choices=["Top", "Bottom"])
+        side_choice.SetSelection(0 if side == "Top" else 1)
+        controls.append(side_choice)
+        row_sizer.Add(side_choice, 0, wx.RIGHT, 8)
+
+        remove_btn = wx.Button(self, label="X", size=(25, -1))
+        controls.append(remove_btn)
+        row_sizer.Add(remove_btn, 0)
+
+        component = {
+            'sizer': row_sizer,
+            'name': name_ctrl,
+            'pattern': pattern_ctrl,
+            'x_offset': x_ctrl,
+            'y_offset': y_ctrl,
+            'rotation': rot_ctrl,
+            'side': side_choice,
+            'remove_btn': remove_btn,
+            'controls': controls
+        }
+
+        # Bind remove button - need to capture component dict after it's fully created
+        def make_remove_handler(comp):
+            def handler(event):
+                self._on_remove_component(comp)
+            return handler
+
+        self.Bind(wx.EVT_BUTTON, make_remove_handler(component), remove_btn)
+
+        return component
+
+    def _on_add_component(self, event):
+        """Add a new additional component row."""
+        name = f"Comp{len(self.additional_components) + 1}"
+        component = self._create_component_row(name=name)
+        self.additional_components.append(component)
+        self.additional_sizer.Add(component['sizer'], 0, wx.EXPAND | wx.BOTTOM, 5)
+        self.Layout()
+        self.Fit()
+
+    def _on_remove_component(self, component: dict):
+        """Remove an additional component row."""
+        if component not in self.additional_components:
+            return
+        self.additional_components.remove(component)
+        # Destroy all controls
+        for ctrl in component['controls']:
+            ctrl.Destroy()
+        # Remove and clear the sizer
+        self.additional_sizer.Remove(component['sizer'])
+        self.Layout()
+        self.Fit()
 
     def _create_buttons(self) -> wx.BoxSizer:
         """Create the dialog buttons."""
@@ -281,42 +296,36 @@ class KDTPlacerDialog(wx.Dialog):
 
         sizer.AddStretchSpacer()
 
-        ok_btn = wx.Button(self, wx.ID_OK, "Place Footprints")
         cancel_btn = wx.Button(self, wx.ID_CANCEL, "Cancel")
+        ok_btn = wx.Button(self, wx.ID_OK, "Place Footprints")
+        ok_btn.SetDefault()
 
-        sizer.Add(ok_btn, 0, wx.RIGHT, 5)
-        sizer.Add(cancel_btn, 0)
+        sizer.Add(cancel_btn, 0, wx.RIGHT, 5)
+        sizer.Add(ok_btn, 0)
 
         return sizer
 
     def _on_reset_defaults(self, event):
         """Reset all settings to defaults."""
-        # Main settings
         self.json_file_ctrl.SetValue("")
         self.step_x_ctrl.SetValue("19.05")
         self.step_y_ctrl.SetValue("19.05")
         self.ref_unit_ctrl.SetValue("60")
 
-        # Switch settings
         self.switch_pattern_ctrl.SetValue("SW{}")
         self.switch_orientation_ctrl.SetValue("0")
-        self.switch_side_radio.SetSelection(0)  # Top
+        self.switch_side_choice.SetSelection(0)
 
-        # Diode settings
         self.diode_enabled_cb.SetValue(True)
-        self.diode_panel.Enable(True)
         self.diode_pattern_ctrl.SetValue("D{}")
         self.diode_x_offset_ctrl.SetValue("0")
         self.diode_y_offset_ctrl.SetValue("5")
         self.diode_orientation_ctrl.SetValue("0")
-        self.diode_side_radio.SetSelection(1)  # Bottom
+        self.diode_side_choice.SetSelection(1)
 
         # Remove all additional components
-        for panel in self.additional_panels[:]:
-            panel.Destroy()
-        self.additional_panels.clear()
-        self.additional_scroll.FitInside()
-        self.Layout()
+        for comp in self.additional_components[:]:
+            self._on_remove_component(comp)
 
     def _on_browse(self, event):
         """Handle browse button click."""
@@ -329,36 +338,20 @@ class KDTPlacerDialog(wx.Dialog):
             if dialog.ShowModal() == wx.ID_OK:
                 self.json_file_ctrl.SetValue(dialog.GetPath())
 
-    def _on_diode_enabled_change(self, event):
-        """Handle diode enabled checkbox change."""
-        self.diode_panel.Enable(self.diode_enabled_cb.GetValue())
-
-    def _on_add_component(self, event):
-        """Add a new additional component panel."""
-        panel = AdditionalComponentPanel(
-            self.additional_scroll,
-            name=f"Comp{len(self.additional_panels) + 1}",
-            on_remove=self._on_remove_component
-        )
-        self.additional_panels.append(panel)
-        self.additional_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, 5)
-        self.additional_scroll.FitInside()
-        self.Layout()
-
-    def _on_remove_component(self, panel: AdditionalComponentPanel):
-        """Remove an additional component panel."""
-        self.additional_panels.remove(panel)
-        panel.Destroy()
-        self.additional_scroll.FitInside()
-        self.Layout()
-
     def get_settings(self) -> dict:
-        """
-        Get all settings from the dialog.
+        """Get all settings from the dialog."""
+        additional_configs = []
+        for comp in self.additional_components:
+            additional_configs.append(ComponentConfig(
+                name=comp['name'].GetValue(),
+                annotation_pattern=comp['pattern'].GetValue(),
+                x_offset_mm=float(comp['x_offset'].GetValue() or 0),
+                y_offset_mm=float(comp['y_offset'].GetValue() or 0),
+                orientation_deg=float(comp['rotation'].GetValue() or 0),
+                pcb_side=comp['side'].GetStringSelection(),
+                enabled=True
+            ))
 
-        Returns:
-            Dictionary with all settings
-        """
         return {
             'json_file': self.json_file_ctrl.GetValue(),
             'step_x_mm': float(self.step_x_ctrl.GetValue() or 19.05),
@@ -370,7 +363,7 @@ class KDTPlacerDialog(wx.Dialog):
                 x_offset_mm=0,
                 y_offset_mm=0,
                 orientation_deg=float(self.switch_orientation_ctrl.GetValue() or 0),
-                pcb_side=self.switch_side_radio.GetStringSelection(),
+                pcb_side=self.switch_side_choice.GetStringSelection(),
                 enabled=True
             ),
             'diode_config': ComponentConfig(
@@ -379,28 +372,23 @@ class KDTPlacerDialog(wx.Dialog):
                 x_offset_mm=float(self.diode_x_offset_ctrl.GetValue() or 0),
                 y_offset_mm=float(self.diode_y_offset_ctrl.GetValue() or 5),
                 orientation_deg=float(self.diode_orientation_ctrl.GetValue() or 0),
-                pcb_side=self.diode_side_radio.GetStringSelection(),
+                pcb_side=self.diode_side_choice.GetStringSelection(),
                 enabled=self.diode_enabled_cb.GetValue()
             ),
-            'additional_configs': [p.get_config() for p in self.additional_panels]
+            'additional_configs': additional_configs
         }
 
     def get_serializable_settings(self) -> dict:
-        """
-        Get settings in a format that can be serialized to JSON.
-
-        Returns:
-            Dictionary with serializable settings
-        """
+        """Get settings in a format that can be serialized to JSON."""
         additional = []
-        for panel in self.additional_panels:
+        for comp in self.additional_components:
             additional.append({
-                'name': panel.name_ctrl.GetValue(),
-                'pattern': panel.pattern_ctrl.GetValue(),
-                'x_offset': panel.x_offset_ctrl.GetValue(),
-                'y_offset': panel.y_offset_ctrl.GetValue(),
-                'orientation': panel.orientation_ctrl.GetValue(),
-                'side': panel.side_choice.GetStringSelection()
+                'name': comp['name'].GetValue(),
+                'pattern': comp['pattern'].GetValue(),
+                'x_offset': comp['x_offset'].GetValue(),
+                'y_offset': comp['y_offset'].GetValue(),
+                'orientation': comp['rotation'].GetValue(),
+                'side': comp['side'].GetStringSelection()
             })
 
         return {
@@ -410,13 +398,13 @@ class KDTPlacerDialog(wx.Dialog):
             'ref_unit': self.ref_unit_ctrl.GetValue(),
             'switch_pattern': self.switch_pattern_ctrl.GetValue(),
             'switch_orientation': self.switch_orientation_ctrl.GetValue(),
-            'switch_side': self.switch_side_radio.GetSelection(),
+            'switch_side': self.switch_side_choice.GetSelection(),
             'diode_enabled': self.diode_enabled_cb.GetValue(),
             'diode_pattern': self.diode_pattern_ctrl.GetValue(),
             'diode_x_offset': self.diode_x_offset_ctrl.GetValue(),
             'diode_y_offset': self.diode_y_offset_ctrl.GetValue(),
             'diode_orientation': self.diode_orientation_ctrl.GetValue(),
-            'diode_side': self.diode_side_radio.GetSelection(),
+            'diode_side': self.diode_side_choice.GetSelection(),
             'additional_components': additional
         }
 
@@ -430,7 +418,6 @@ class KDTPlacerDialog(wx.Dialog):
         if not settings:
             return
 
-        # Main settings
         if 'json_file' in settings:
             self.json_file_ctrl.SetValue(settings['json_file'])
         if 'step_x' in settings:
@@ -440,18 +427,15 @@ class KDTPlacerDialog(wx.Dialog):
         if 'ref_unit' in settings:
             self.ref_unit_ctrl.SetValue(settings['ref_unit'])
 
-        # Switch settings
         if 'switch_pattern' in settings:
             self.switch_pattern_ctrl.SetValue(settings['switch_pattern'])
         if 'switch_orientation' in settings:
             self.switch_orientation_ctrl.SetValue(settings['switch_orientation'])
         if 'switch_side' in settings:
-            self.switch_side_radio.SetSelection(settings['switch_side'])
+            self.switch_side_choice.SetSelection(settings['switch_side'])
 
-        # Diode settings
         if 'diode_enabled' in settings:
             self.diode_enabled_cb.SetValue(settings['diode_enabled'])
-            self.diode_panel.Enable(settings['diode_enabled'])
         if 'diode_pattern' in settings:
             self.diode_pattern_ctrl.SetValue(settings['diode_pattern'])
         if 'diode_x_offset' in settings:
@@ -461,33 +445,23 @@ class KDTPlacerDialog(wx.Dialog):
         if 'diode_orientation' in settings:
             self.diode_orientation_ctrl.SetValue(settings['diode_orientation'])
         if 'diode_side' in settings:
-            self.diode_side_radio.SetSelection(settings['diode_side'])
+            self.diode_side_choice.SetSelection(settings['diode_side'])
 
-        # Additional components
         if 'additional_components' in settings:
-            for comp in settings['additional_components']:
-                panel = AdditionalComponentPanel(
-                    self.additional_scroll,
-                    name=comp.get('name', ''),
-                    on_remove=self._on_remove_component
+            for comp_data in settings['additional_components']:
+                component = self._create_component_row(
+                    name=comp_data.get('name', ''),
+                    pattern=comp_data.get('pattern', 'LED{}'),
+                    x_offset=comp_data.get('x_offset', '0'),
+                    y_offset=comp_data.get('y_offset', '0'),
+                    rotation=comp_data.get('orientation', '0'),
+                    side=comp_data.get('side', 'Top')
                 )
-                panel.pattern_ctrl.SetValue(comp.get('pattern', 'LED{}'))
-                panel.x_offset_ctrl.SetValue(comp.get('x_offset', '0'))
-                panel.y_offset_ctrl.SetValue(comp.get('y_offset', '0'))
-                panel.orientation_ctrl.SetValue(comp.get('orientation', '0'))
-                side = comp.get('side', 'Top')
-                panel.side_choice.SetSelection(0 if side == 'Top' else 1)
-                self.additional_panels.append(panel)
-                self.additional_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, 5)
-            self.additional_scroll.FitInside()
+                self.additional_components.append(component)
+                self.additional_sizer.Add(component['sizer'], 0, wx.EXPAND | wx.BOTTOM, 5)
 
     def validate(self) -> Tuple[bool, str]:
-        """
-        Validate the dialog settings.
-
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
+        """Validate the dialog settings."""
         json_file = self.json_file_ctrl.GetValue()
         if not json_file:
             return False, "Please select a JSON file"
@@ -516,8 +490,8 @@ class KDTPlacerDialog(wx.Dialog):
             if "{}" not in self.diode_pattern_ctrl.GetValue():
                 return False, "Diode annotation pattern must contain {}"
 
-        for panel in self.additional_panels:
-            if "{}" not in panel.pattern_ctrl.GetValue():
-                return False, f"Additional component '{panel.name_ctrl.GetValue()}' pattern must contain {{}}"
+        for comp in self.additional_components:
+            if "{}" not in comp['pattern'].GetValue():
+                return False, f"Additional component '{comp['name'].GetValue()}' pattern must contain {{}}"
 
         return True, ""

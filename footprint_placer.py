@@ -212,7 +212,8 @@ class FootprintPlacer:
 
         try:
             # Calculate offset with key rotation applied
-            rotated_x, rotated_y = rotate_offset(x_offset_mm, y_offset_mm, key.rotation)
+            # Negate rotation to match KiCad's coordinate system
+            rotated_x, rotated_y = rotate_offset(x_offset_mm, y_offset_mm, -key.rotation)
 
             # Final position
             final_x_mm = base_x_mm + rotated_x
@@ -223,7 +224,8 @@ class FootprintPlacer:
             fp.SetPosition(pos)
 
             # Set orientation (base + key rotation)
-            total_rotation = config.orientation_deg + key.rotation
+            # Negate key.rotation because KiCad uses opposite rotation direction from KDT
+            total_rotation = config.orientation_deg - key.rotation
             angle = pcbnew.EDA_ANGLE(total_rotation, pcbnew.DEGREES_T)
             fp.SetOrientation(angle)
 
